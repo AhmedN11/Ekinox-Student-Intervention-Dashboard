@@ -386,7 +386,7 @@ def display_student_profile(student_row: pd.Series, df: pd.DataFrame):
         df: Full DataFrame for context
     """
     logger.info(f"Displaying profile for student: {student_row['StudentID']}")
-    st.markdown("---")
+    # st.markdown("---")
     
     # Create student name display
     student_name = f"{student_row.get('FirstName', '')} {student_row.get('FamilyName', '')}".strip()
@@ -471,6 +471,62 @@ def display_student_profile(student_row: pd.Series, df: pd.DataFrame):
         for intervention in interventions:
             st.markdown(f"- {intervention}")
     
+    # Radar chart section
+    st.markdown("---")
+    st.markdown("#### 📊 Indicator Overview - Radar Chart")
+    
+    # Prepare data for radar chart
+    indicator_labels = [
+        'High Absences',
+        'Low Study Time',
+        'Alcohol Issues',
+        'Past Failures',
+        'No School Support',
+        'No Family Support',
+        'Poor Family Relations',
+        'Health Issues'
+    ]
+    
+    indicator_values = [
+        student_row.get('high_absences', 0),
+        student_row.get('low_studytime', 0),
+        student_row.get('alcohol_issues', 0),
+        student_row.get('past_failures', 0),
+        student_row.get('no_school_support', 0),
+        student_row.get('no_family_support', 0),
+        student_row.get('poor_family_relations', 0),
+        student_row.get('health_issues', 0)
+    ]
+    
+    # Create radar chart
+    fig_radar = go.Figure()
+    
+    fig_radar.add_trace(go.Scatterpolar(
+        r=indicator_values,
+        theta=indicator_labels,
+        fill='toself',
+        fillcolor='rgba(211, 47, 47, 0.3)',
+        line=dict(color='#d32f2f', width=2),
+        name='Risk Indicators'
+    ))
+    
+    fig_radar.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 1],
+                tickvals=[0, 1],
+                ticktext=['No Risk', 'At Risk'],
+                showticklabels=True
+            )
+        ),
+        showlegend=False,
+        height=500,
+        margin=dict(l=80, r=80, t=40, b=40)
+    )
+    
+    st.plotly_chart(fig_radar, use_container_width=True)
+    
     # Demographics section (collapsible)
     with st.expander("👥 Demographics & Background"):
         demo_col1, demo_col2, demo_col3 = st.columns(3)
@@ -538,7 +594,7 @@ def display_data_selection_page():
     )
     
     st.markdown("---")
-    st.header("📁 Data File Selection")
+    st.header(" Data File Selection")
     
     # Check for existing files in data folder
     data_folder = 'data'
@@ -887,11 +943,11 @@ def main():
     # Apply styling based on urgency zone
     def highlight_urgency(row):
         if row['Urgency Zone'] == 'High Priority':
-            return ['background-color: #ffcdd2'] * len(row)
+            return ['background-color: #ffcdd2; color: black'] * len(row)
         elif row['Urgency Zone'] == 'Moderate Priority':
-            return ['background-color: #ffe0b2'] * len(row)
+            return ['background-color: #ffe0b2; color: black'] * len(row)
         else:
-            return ['background-color: #c8e6c9'] * len(row)
+            return ['background-color: #c8e6c9; color: black'] * len(row)
     
     styled_df = display_df.style.apply(highlight_urgency, axis=1)
     
@@ -1077,8 +1133,7 @@ def main():
     st.markdown("---")
     st.markdown(
         "<div style='text-align: center; color: gray;'>" 
-        "Student Intervention Dashboard v1.0 | Portuguese Ministry of Education | "
-        f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        "Student Intervention Dashboard v1.0 | Portuguese Ministry of Education"
         "</div>",
         unsafe_allow_html=True
     )
