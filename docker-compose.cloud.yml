@@ -1,0 +1,37 @@
+version: '3.8'
+
+# Docker Compose configuration for cloud-based LLM providers only
+# Use this if you're using Mistral, OpenAI, Anthropic, or Groq
+# and don't need local Ollama
+
+services:
+  # Main Streamlit Application
+  streamlit-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: student-intervention-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      # Persist data files
+      - ./data:/app/data
+      # Persist logs
+      - ./Logs:/app/Logs
+      # Mount .env file for configuration
+      - ./.env:/app/.env:ro
+    environment:
+      - DOCKER_ENV=true
+    networks:
+      - dashboard-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8501/_stcore/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  dashboard-network:
+    driver: bridge

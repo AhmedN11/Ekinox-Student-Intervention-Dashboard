@@ -45,43 +45,174 @@ The system evaluates 8 key indicators for each student:
 
 ## Installation
 
-### Prerequisites
+### Option 1: Docker Deployment (Recommended)
+
+#### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+- [Docker Compose](https://docs.docker.com/compose/install/) (included with Docker Desktop)
+
+#### Quick Start with Docker
+
+1. **Clone or download this repository**
+   ```bash
+   cd Ekinox-Student-Intervention-Dashboard
+   ```
+
+2. **(Optional) Create environment file for Docker**
+   ```bash
+   # Copy the example file
+   cp .env.example .env
+   
+   # Edit .env file if you want to pre-configure LLM settings
+   nano .env
+   # or
+   vim .env
+   ```
+   
+   **Note about DOCKER_ENV:** When launching with `docker-compose`, the `DOCKER_ENV` variable is automatically set to `true` in the docker-compose.yml file, so you don't need to manually set it in your `.env` file.
+   
+   **Note:** LLM configuration (API keys, model names) can be done directly from the dashboard homepage instead of editing the `.env` file. However, if you prefer to pre-configure your LLM settings:
+   
+   **For Local Ollama (No API key required):**
+   ```env
+   OLLAMA_MODEL_NAME=ollama/llama2
+   OLLAMA_BASE_URL=http://ollama:11434
+   ```
+   
+   **For Cloud Providers (e.g., Mistral, OpenAI):**
+   ```env
+   MISTRAL_API_KEY=your_api_key_here
+   MISTRAL_MODEL_NAME=mistral/codestral-2508
+   ```
+
+3. **(Optional) Place your data file in the data folder**
+   ```bash
+   # You can optionally pre-load your data file
+   cp your_students_file.csv data/
+   # Or upload it directly through the dashboard interface
+   ```
+   
+   **Note:** You can upload your student data (CSV, XLSX, or XLS) directly from the dashboard interface.
+
+4. **Start the application**
+   ```bash
+   # Build and start all services
+   docker-compose up --build
+   
+   # Or run in detached mode (background)
+   docker-compose up -d --build
+   ```
+
+5. **Access the dashboard**
+   - Open your browser and navigate to: `http://localhost:8501`
+   - Configure your LLM provider directly from the homepage settings
+   - The application will be ready in 10-30 seconds
+
+6. **If using Ollama, pull a model (first time only)**
+   ```bash
+   # Connect to the Ollama container
+   docker exec -it ollama-service ollama pull llama2
+   
+   # Or pull other models
+   docker exec -it ollama-service ollama pull mistral
+   docker exec -it ollama-service ollama pull codellama
+   ```
+
+#### Docker Management Commands
+
+```bash
+# Stop the application
+docker-compose down
+
+# Stop and remove all data (including Ollama models)
+docker-compose down -v
+
+# View logs
+docker-compose logs -f
+
+# View logs for specific service
+docker-compose logs -f streamlit-app
+docker-compose logs -f ollama
+
+# Restart the application
+docker-compose restart
+
+# Rebuild after code changes
+docker-compose up --build
+```
+
+#### Using Without Ollama (Cloud LLMs Only)
+
+If you're using cloud-based LLMs (Mistral, OpenAI, Anthropic, Groq) and don't need local Ollama:
+
+**Option A: Use the cloud-specific compose file**
+```bash
+docker-compose -f docker-compose.cloud.yml up --build
+```
+
+**Option B: Run only the streamlit service**
+```bash
+docker-compose up streamlit-app --build
+```
+
+---
+
+### Option 2: Local Python Installation
+
+#### Prerequisites
 - Python 3.8 or higher
 - pip package manager
 
-### Setup Steps
+#### Setup Steps
 
 1. **Clone or download this repository**
-   ```powershell
-   cd student-intervention-dashboard
+   ```bash
+   cd Ekinox-Student-Intervention-Dashboard
    ```
 
 2. **Create a virtual environment (recommended)**
+   
+   **On Windows (PowerShell):**
    ```powershell
-   python -m venv venv
-   .\venv\Scripts\Activate.ps1
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+   
+   **On Windows (Command Prompt):**
+   ```cmd
+   python -m venv .venv
+   .venv\Scripts\activate.bat
+   ```
+   
+   **On macOS/Linux:**
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
    ```
 
 3. **Install required packages**
-   ```powershell
+   ```bash
    pip install -r requirements.txt
    ```
 
-4. **Create environment file**  
-   Use the .env.example file in the project root to add your configuration variables to a `.env` file.
+4. **(Optional) Install and run Ollama locally**
+   - Download from: https://ollama.ai/
+   - Run: `ollama serve`
+   - Pull a model: `ollama pull llama2`
 
 5. **Run the dashboard**
-   ```powershell
+   ```bash
    streamlit run app.py
    ```
 
 6. **Access the dashboard**
    - The dashboard will open automatically in your default browser
    - If not, navigate to `http://localhost:8501`
+   - Configure your LLM provider directly from the homepage settings
 
 ## Data Format
 
-Your `students.csv` file must include the following columns:
+Your student data file (CSV, XLSX, or XLS) can be uploaded directly through the dashboard interface and must include the following columns:
 
 ### Required Columns
 - `StudentID`: Unique student identifier
@@ -119,37 +250,45 @@ STU003,16,0,3,1,1,0,no,yes,5,4,18,F,R
 ## Project Structure
 
 ```
-student-intervention-dashboard/
-├── app.py                 # Main Streamlit application
-├── data_processor.py      # Data processing and scoring functions
-├── requirements.txt       # Python dependencies
-├── README.md             # This file
-├── test_logging.py       # Logging test script
-├── data/                 # Data folder (gitignored)
-│   └── students.csv      # Your student data (not included)
-└── Logs/                 # Log files (auto-created)
-    ├── README.md         # Logging system documentation
-    ├── dashboard.log     # Application logs
-    └── data_processor.log # Processing logs
+Ekinox-Student-Intervention-Dashboard/
+├── app.py                    # Main Streamlit application
+├── data_processor.py         # Data processing and scoring functions
+├── requirements.txt          # Python dependencies
+├── Dockerfile                # Docker image configuration
+├── docker-compose.yml        # Docker services orchestration
+├── .dockerignore            # Files to exclude from Docker build
+├── .env.example             # Environment variables template
+├── README.md                # This file
+├── test_logging.py          # Logging test script
+├── data/                    # Data folder
+│   └── students.csv         # Your student data
+└── Logs/                    # Log files (auto-created)
+    ├── README.md            # Logging system documentation
+    ├── dashboard.log        # Application logs
+    └── data_processor.log   # Processing logs
 ```
 
 ## Usage Guide
 
-### 1. Initial View
-Upon loading, you'll see:
+### 1. Upload Your Data
+- Upload your student data file (CSV, XLSX, or XLS format) using the file uploader on the homepage
+- Alternatively, you can place a data file in the `data/` folder before starting the application
+
+### 2. Initial View
+After loading data, you'll see:
 - Priority matrix showing all students
 - Top 30 priority students list
 - Distribution of actionable indicators
 - Summary statistics
 
-### 2. Filtering Students
+### 3. Filtering Students
 Use the sidebar to:
 - Adjust grade range (e.g., focus on failing students)
 - Set minimum intervention score threshold
 - Select specific indicators to filter by
 - Reset all filters with one click
 
-### 3. Analyzing Individual Students
+### 4. Analyzing Individual Students
 - Click on any point in the priority matrix, OR
 - Use the dropdown selector to choose a student
 - View detailed profile with:
@@ -158,7 +297,7 @@ Use the sidebar to:
   - Personalized intervention recommendations
   - Demographics and background
 
-### 4. Exporting Data
+### 5. Exporting Data
 - Click "Download Priority List (CSV)" button
 - File will be saved as `priority_students_YYYYMMDD.csv`
 - Contains all visible filtered students with calculated scores
@@ -185,27 +324,131 @@ Use the sidebar to:
 
 ## Troubleshooting
 
-### Dashboard won't start
+### Docker Issues
+
+#### Container won't start
+```bash
+# Check if Docker is running
+docker ps
+
+# Check logs for errors
+docker-compose logs
+
+# Rebuild containers
+docker-compose down
+docker-compose up --build
+```
+
+#### Ollama service not accessible
+```bash
+# Check if Ollama container is running
+docker ps | grep ollama
+
+# Check Ollama logs
+docker-compose logs ollama
+
+# Test Ollama API
+curl http://localhost:11434/api/tags
+```
+
+#### Port already in use
+```bash
+# Find process using port 8501
+lsof -i :8501
+# or
+netstat -tuln | grep 8501
+
+# Change port in docker-compose.yml
+# ports:
+#   - "8502:8501"  # Use different host port
+```
+
+#### Volume/data persistence issues
+```bash
+# Check volumes
+docker volume ls
+
+# Remove all volumes and start fresh
+docker-compose down -v
+docker-compose up --build
+```
+
+### Application Issues
+
+#### Dashboard won't start (Local Python)
 - Ensure all dependencies are installed: `pip install -r requirements.txt`
 - Check Python version: `python --version` (should be 3.8+)
 - Verify virtual environment is activated
 
-### Data file not found
-- Check that `data/students.csv` exists
-- Verify the file path is correct
-- Ensure the CSV file is properly formatted
+#### Data file not found
+- Use the file uploader on the dashboard homepage to upload your data file (CSV, XLSX, or XLS)
+- Alternatively, place a file in the `data/` folder
+- Ensure the file is properly formatted with required columns
+- In Docker: Check volume mount is correct if using the data folder
 
-### Missing columns error
+#### Missing columns error
 - Verify your CSV contains all required columns
 - Check column names match exactly (case-sensitive)
 - Ensure no extra spaces in column names
 
-### Charts not displaying
+#### Charts not displaying
 - Try refreshing the browser
 - Check browser console for JavaScript errors
 - Ensure Plotly is properly installed
 
+#### LLM/AI features not working
+
+**For Ollama:**
+```bash
+# Verify Ollama is running
+docker exec -it ollama-service ollama list
+
+# Pull a model if none available
+docker exec -it ollama-service ollama pull llama2
+
+# Check Ollama logs
+docker-compose logs ollama
+```
+
+**For Cloud APIs:**
+- Verify API key is set in `.env` file
+- Check API key has proper permissions
+- Verify model name is correct
+- Check network connectivity
+
 ## Technical Details
+
+### Docker Architecture
+
+The application is containerized using Docker with the following architecture:
+
+**Services:**
+- **streamlit-app**: Main application container running the Streamlit dashboard
+  - Exposes port 8501
+  - Mounts volumes for data persistence (data/, Logs/)
+  - Automatically detects Docker environment and adjusts Ollama URL
+  
+- **ollama** (optional): Local LLM service container
+  - Exposes port 11434
+  - Stores downloaded models in persistent volume
+  - Accessible by streamlit-app via Docker network as `http://ollama:11434`
+
+**Networking:**
+- Both containers connected via `dashboard-network` bridge network
+- Internal DNS resolution allows service-to-service communication
+- Ollama accessible from host at `localhost:11434`
+- Dashboard accessible from host at `localhost:8501`
+
+**Volume Mounts:**
+- `./data:/app/data` - Student data files (bind mount)
+- `./Logs:/app/Logs` - Application logs (bind mount)
+- `./.env:/app/.env` - Environment variables (bind mount, read-only)
+- `ollama-data:/root/.ollama` - Ollama models (named volume)
+
+**Environment Detection:**
+The application automatically detects when running in Docker via the `DOCKER_ENV` environment variable and adjusts the Ollama base URL accordingly:
+- **Docker**: `http://ollama:11434` (service name)
+- **Local**: `http://localhost:11434` (localhost)
 
 ### Logging System
 The dashboard includes a comprehensive logging system that tracks all operations:
@@ -218,15 +461,15 @@ The dashboard includes a comprehensive logging system that tracks all operations
   - `data_processor.log` - Processing logs (calculations, classifications)
 
 **View logs:**
-```powershell
+```bash
 # View recent logs
-Get-Content Logs/dashboard.log -Tail 20
+tail -n 20 Logs/dashboard.log
 
 # Monitor logs in real-time
-Get-Content Logs/dashboard.log -Wait
+tail -f Logs/dashboard.log
 
 # Search for errors
-Select-String -Path Logs/*.log -Pattern "ERROR"
+grep "ERROR" Logs/*.log
 ```
 
 📖 **Full documentation**: See `Logs/README.md` for complete logging system details.

@@ -25,6 +25,25 @@ from data_processor import (
 # Load environment variables
 load_dotenv()
 
+# Helper function to get Ollama base URL
+def get_ollama_base_url():
+    """
+    Get the appropriate Ollama base URL based on environment.
+    Returns:
+        str: Ollama API endpoint URL
+    """
+    # Priority 1: Check if OLLAMA_BASE_URL is explicitly set
+    ollama_url = os.getenv('OLLAMA_BASE_URL')
+    if ollama_url:
+        return ollama_url
+    
+    # Priority 2: Check if running in Docker
+    if os.getenv('DOCKER_ENV') == 'true':
+        return 'http://ollama:11434'
+    
+    # Priority 3: Default to localhost for local development
+    return 'http://localhost:11434'
+
 # Setup logging
 def setup_logging():
     """Configure logging with both console and file handlers with rotation."""
@@ -587,22 +606,34 @@ def display_student_profile(student_row: pd.Series, df: pd.DataFrame):
 def get_ollama_models():
     """Get list of available Ollama models."""
     try:
-        import subprocess
-        result = subprocess.run(
-            ['ollama', 'list'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if result.returncode == 0:
-            lines = result.stdout.strip().split('\n')[1:]  # Skip header
-            models = []
-            for line in lines:
-                if line.strip():
-                    model_name = line.split()[0]
-                    models.append(model_name)
-            return models
-        return []
+        # If running in Docker, use HTTP API
+        if os.getenv('DOCKER_ENV') == 'true':
+            import requests
+            ollama_url = get_ollama_base_url()
+            response = requests.get(f"{ollama_url}/api/tags", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                models = [model['name'] for model in data.get('models', [])]
+                return models
+            return []
+        else:
+            # Use CLI for local environment
+            import subprocess
+            result = subprocess.run(
+                ['ollama', 'list'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')[1:]  # Skip header
+                models = []
+                for line in lines:
+                    if line.strip():
+                        model_name = line.split()[0]
+                        models.append(model_name)
+                return models
+            return []
     except Exception as e:
         logger.warning(f"Failed to get Ollama models: {e}")
         return []
@@ -611,14 +642,26 @@ def get_ollama_models():
 def pull_ollama_model(model_name: str) -> bool:
     """Pull an Ollama model."""
     try:
-        import subprocess
-        result = subprocess.run(
-            ['ollama', 'pull', model_name],
-            capture_output=True,
-            text=True,
-            timeout=300
-        )
-        return result.returncode == 0
+        # If running in Docker, use HTTP API
+        if os.getenv('DOCKER_ENV') == 'true':
+            import requests
+            ollama_url = get_ollama_base_url()
+            response = requests.post(
+                f"{ollama_url}/api/pull",
+                json={"name": model_name},
+                timeout=300
+            )
+            return response.status_code == 200
+        else:
+            # Use CLI for local environment
+            import subprocess
+            result = subprocess.run(
+                ['ollama', 'pull', model_name],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            return result.returncode == 0
     except Exception as e:
         logger.error(f"Failed to pull Ollama model: {e}")
         return False
@@ -1287,9 +1330,11 @@ def main():
                     
                     # Initialize the LiteLLM model
                     if provider == 'OLLAMA':
+                        ollama_url = get_ollama_base_url()
+                        logger.info(f"Using Ollama endpoint: {ollama_url}")
                         model = LiteLLMModel(
                             model_id=model_name,
-                            api_base='http://localhost:11434'  # Default Ollama API endpoint
+                            api_base=ollama_url
                         )
                     else:
                         model = LiteLLMModel(

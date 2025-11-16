@@ -1,10 +1,12 @@
 # Data Folder
 
-Place your `students.csv` file in this directory.
+**Note:** Placing files in this directory is **optional**. You can upload your student data (CSV, XLSX, or XLS) directly through the dashboard.
 
-## Required CSV Format
+If you prefer to pre-load your data, you can place your data file in this directory.
 
-Your CSV file must include these columns:
+## Required Data Format
+
+Your data file (CSV, XLSX, or XLS) must include these columns:
 
 ### Core Columns (Required)
 - StudentID
@@ -31,7 +33,7 @@ Your CSV file must include these columns:
 - activities
 - internet
 
-## Example
+## Example Format
 
 ```csv
 StudentID,FinalGrade,absences,studytime,Dalc,Walc,failures,schoolsup,famsup,famrel,health,age,sex,address
@@ -39,6 +41,12 @@ STU001,14,2,2,1,1,0,no,yes,4,5,18,F,U
 STU002,8,15,1,3,4,1,yes,no,2,3,17,M,U
 STU003,16,0,3,1,1,0,no,yes,5,4,18,F,R
 ```
+
+**Supported formats:** CSV, XLSX (Excel), XLS (Excel)
+
+## Data Upload
+
+✅ **Recommended:** Upload your data file directly through the dashboard interface for convenience.
 
 ## Data Privacy
 

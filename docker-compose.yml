@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Main Streamlit Application
+  streamlit-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: student-intervention-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      # Persist data files
+      - ./data:/app/data
+      # Persist logs
+      - ./Logs:/app/Logs
+      # Mount .env file for configuration
+      - ./.env:/app/.env:ro
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - DOCKER_ENV=true
+    networks:
+      - dashboard-network
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8501/_stcore/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Ollama Service (for local LLM)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-service
+    ports:
+      - "11434:11434"
+    volumes:
+      # Persist downloaded models
+      - ollama-data:/root/.ollama
+    networks:
+      - dashboard-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+networks:
+  dashboard-network:
+    driver: bridge
+
+volumes:
+  # Named volume for Ollama models persistence
+  ollama-data:
+    driver: local

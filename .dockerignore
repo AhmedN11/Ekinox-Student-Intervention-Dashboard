@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment files (use .env.example as template)
+.env
+
+# Logs (structure will be created, but don't copy existing logs)
+Logs/*.log
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Documentation
+*.md
+!README.md
+
+# Data files (optional - uncomment if you don't want to include data in image)
+# data/*.csv
+
+# Jupyter
+.ipynb_checkpoints
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose*.yml
