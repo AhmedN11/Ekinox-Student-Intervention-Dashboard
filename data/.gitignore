@@ -1,0 +1,7 @@
+# Ignore data files for privacy
+*.csv
+*.xlsx
+*.xls
+
+# But keep the README
+!README.md
