@@ -584,6 +584,106 @@ def display_student_profile(student_row: pd.Series, df: pd.DataFrame):
             st.write(f"Family Relations: {decode_rating(famrel_val, 'quality') if pd.notna(famrel_val) else 'N/A'}")
 
 
+def get_ollama_models():
+    """Get list of available Ollama models."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['ollama', 'list'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')[1:]  # Skip header
+            models = []
+            for line in lines:
+                if line.strip():
+                    model_name = line.split()[0]
+                    models.append(model_name)
+            return models
+        return []
+    except Exception as e:
+        logger.warning(f"Failed to get Ollama models: {e}")
+        return []
+
+
+def pull_ollama_model(model_name: str) -> bool:
+    """Pull an Ollama model."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['ollama', 'pull', model_name],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        return result.returncode == 0
+    except Exception as e:
+        logger.error(f"Failed to pull Ollama model: {e}")
+        return False
+
+
+def save_to_env_file(provider: str, model_name: str, api_key: str = None):
+    """Save LLM configuration to .env file."""
+    env_path = '.env'
+    env_vars = {}
+    
+    # Read existing .env file
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    env_vars[key.strip()] = value.strip()
+    
+    # Update with new values
+    if provider.lower() == 'ollama':
+        env_vars['OLLAMA_MODEL_NAME'] = f'ollama/{model_name}'
+        # Remove API key if exists
+        env_vars.pop('MISTRAL_API_KEY', None)
+        env_vars.pop('OPENAI_API_KEY', None)
+    else:
+        # For other providers (mistral, openai, etc.)
+        env_vars[f'{provider.upper()}_MODEL_NAME'] = f'{provider.lower()}/{model_name}'
+        if api_key:
+            env_vars[f'{provider.upper()}_API_KEY'] = api_key
+    
+    # Write back to .env file
+    with open(env_path, 'w') as f:
+        for key, value in env_vars.items():
+            f.write(f'{key}={value}\n')
+    
+    logger.info(f"Saved LLM configuration to .env: {provider}/{model_name}")
+    return True
+
+
+def get_current_llm_config():
+    """Get current LLM configuration from .env file."""
+    config = {
+        'provider': None,
+        'model_name': None,
+        'api_key_set': False
+    }
+    
+    # Check for different providers
+    providers_to_check = ['MISTRAL', 'OPENAI', 'OLLAMA', 'ANTHROPIC', 'GROQ']
+    
+    for provider in providers_to_check:
+        model_key = f'{provider}_MODEL_NAME'
+        api_key = f'{provider}_API_KEY'
+        
+        model_value = os.getenv(model_key)
+        if model_value:
+            config['provider'] = provider.lower()
+            config['model_name'] = model_value
+            config['api_key_set'] = bool(os.getenv(api_key))
+            break
+    
+    return config
+
+
 def display_data_selection_page():
     """Display the data file selection and upload page."""
     logger.info("Displaying data selection page")
@@ -594,7 +694,124 @@ def display_data_selection_page():
     )
     
     st.markdown("---")
-    st.header(" Data File Selection")
+    
+    # LLM Configuration Section
+    st.header("🤖 LLM Configuration (Optional)")
+    st.markdown(
+        "Configure your AI provider for the intelligent data query feature. "
+        "You can skip this and proceed to load data - the AI feature will be disabled."
+    )
+    
+    # Show current configuration
+    current_config = get_current_llm_config()
+    
+    if current_config['provider']:
+        st.success(
+            f"✅ **Current Configuration:** {current_config['provider'].upper()} - "
+            f"{current_config['model_name']} "
+            f"{'(API Key Set)' if current_config['api_key_set'] else '(No API Key)'}"
+        )
+    else:
+        st.info("ℹ️ No LLM provider configured. AI query feature will be unavailable.")
+    
+    with st.expander("⚙️ Configure LLM Provider", expanded=not current_config['provider']):
+        col_provider, col_model = st.columns(2)
+        
+        with col_provider:
+            provider_options = ['Ollama', 'Mistral', 'OpenAI', 'Anthropic', 'Groq']
+            selected_provider = st.selectbox(
+                "Select Provider",
+                options=provider_options,
+                help="Choose your LLM provider. Ollama runs locally, others require API keys."
+            )
+        
+        with col_model:
+            if selected_provider == 'Ollama':
+                # Get available Ollama models
+                ollama_models = get_ollama_models()
+                
+                if ollama_models:
+                    selected_model = st.selectbox(
+                        "Select Model",
+                        options=ollama_models,
+                        help="Choose from your locally available Ollama models"
+                    )
+                else:
+                    st.warning("⚠️ No Ollama models found. Please install Ollama and pull a model.")
+                    selected_model = st.text_input(
+                        "Model Name",
+                        placeholder="e.g., llama2, mistral, codellama",
+                        help="Enter the name of the model you want to pull"
+                    )
+                    
+                    if selected_model and st.button("📥 Pull Model from Ollama"):
+                        with st.spinner(f"Pulling {selected_model} from Ollama..."):
+                            if pull_ollama_model(selected_model):
+                                st.success(f"✅ Successfully pulled {selected_model}")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Failed to pull {selected_model}. Make sure Ollama is installed and running.")
+            else:
+                # For API-based providers
+                if selected_provider == 'Mistral':
+                    default_model = 'codestral-2508'
+                    model_examples = "e.g., codestral-2508, mistral-large-latest"
+                elif selected_provider == 'OpenAI':
+                    default_model = 'gpt-4'
+                    model_examples = "e.g., gpt-4, gpt-3.5-turbo"
+                elif selected_provider == 'Anthropic':
+                    default_model = 'claude-3-sonnet'
+                    model_examples = "e.g., claude-3-opus, claude-3-sonnet"
+                elif selected_provider == 'Groq':
+                    default_model = 'mixtral-8x7b'
+                    model_examples = "e.g., mixtral-8x7b, llama2-70b"
+                else:
+                    default_model = ''
+                    model_examples = "Enter model name"
+                
+                selected_model = st.text_input(
+                    "Model Name",
+                    value=default_model,
+                    placeholder=model_examples,
+                    help=f"Enter the {selected_provider} model name"
+                )
+        
+        # API Key input (not needed for Ollama)
+        api_key = None
+        if selected_provider != 'Ollama':
+            api_key = st.text_input(
+                f"{selected_provider} API Key",
+                type="password",
+                placeholder=f"Enter your {selected_provider} API key",
+                help=f"Your API key will be saved to the .env file"
+            )
+        
+        # Save configuration button
+        col_save, col_skip = st.columns(2)
+        
+        with col_save:
+            if st.button("💾 Save LLM Configuration", type="primary"):
+                if selected_provider and selected_model:
+                    if selected_provider != 'Ollama' and not api_key:
+                        st.error("❌ API key is required for non-Ollama providers")
+                    else:
+                        try:
+                            save_to_env_file(selected_provider, selected_model, api_key)
+                            st.success(f"✅ Configuration saved! Reload environment variables to use.")
+                            # Reload environment variables
+                            load_dotenv(override=True)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error saving configuration: {e}")
+                else:
+                    st.error("❌ Please select both provider and model")
+        
+        with col_skip:
+            if st.button("⏭️ Skip Configuration"):
+                st.info("You can configure LLM later. AI query feature will be disabled.")
+    
+    st.markdown("---")
+    st.header("📁 Data File Selection")
     
     # Check for existing files in data folder
     data_folder = 'data'
@@ -641,7 +858,7 @@ def display_data_selection_page():
     
     uploaded_file = st.file_uploader(
         "Choose a CSV file",
-        type=['csv'],
+        type=['xlsx', 'xls', 'csv'],
         help="Upload a CSV file with student data"
     )
     
@@ -1051,19 +1268,34 @@ def main():
         if (ask_button and user_question) or example_question:
             with st.spinner("🤔 Thinking..."):
                 try:
-                    # Get API key and model name from environment
-                    api_key = os.getenv('MISTRAL_API_KEY')
-                    model_name = os.getenv('MISTRAL_MODEL_NAME', 'mistral/codestral-2508')
+                    # Get current LLM configuration
+                    llm_config = get_current_llm_config()
                     
-                    if not api_key:
-                        st.error("❌ Mistral API key not found. Please set MISTRAL_API_KEY in your .env file.")
+                    if not llm_config['provider']:
+                        st.error("❌ No LLM provider configured. Please configure in the data selection page.")
                         st.stop()
                     
-                    # Initialize the LiteLLM model for Mistral
-                    model = LiteLLMModel(
-                        model_id=model_name,
-                        api_key=api_key
-                    )
+                    # Get API key and model name from environment
+                    provider = llm_config['provider'].upper()
+                    model_name = llm_config['model_name']
+                    api_key = os.getenv(f'{provider}_API_KEY')
+                    
+                    # For Ollama, API key is not required
+                    if provider != 'OLLAMA' and not api_key:
+                        st.error(f"❌ {provider} API key not found. Please configure in the data selection page.")
+                        st.stop()
+                    
+                    # Initialize the LiteLLM model
+                    if provider == 'OLLAMA':
+                        model = LiteLLMModel(
+                            model_id=model_name,
+                            api_base='http://localhost:11434'  # Default Ollama API endpoint
+                        )
+                    else:
+                        model = LiteLLMModel(
+                            model_id=model_name,
+                            api_key=api_key
+                        )
                     
                     # Create the CodeAgent with the model
                     agent = CodeAgent(
