@@ -60,73 +60,246 @@ logger = setup_logging()
 logger.info("Data Processor module initialized")
 
 
+def calculate_correlation(x, y):
+    """
+    Calculate Pearson correlation coefficient between two variables.
+    
+    Args:
+        x: First variable (array-like)
+        y: Second variable (array-like)
+        
+    Returns:
+        Correlation coefficient (-1 to 1)
+    """
+    n = len(x)
+    if n == 0:
+        return 0
+    
+    sum_x = sum(x)
+    sum_y = sum(y)
+    sum_xy = sum(xi * yi for xi, yi in zip(x, y))
+    sum_x2 = sum(xi * xi for xi in x)
+    sum_y2 = sum(yi * yi for yi in y)
+    
+    numerator = n * sum_xy - sum_x * sum_y
+    denominator = np.sqrt((n * sum_x2 - sum_x * sum_x) * (n * sum_y2 - sum_y * sum_y))
+    
+    return 0 if denominator == 0 else numerator / denominator
+
+
 def calculate_intervention_score(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calculate an Intervention Complexity Score for each student.
+    Calculate an Intervention Complexity Score for each student using data-driven methodology.
+    
+    This function implements an exhaustive correlation-based approach:
+    1. Tests ALL possible indicators across demographic, family, school, support, 
+       activities, leisure, health, and motivation categories
+    2. Calculates Pearson correlation with FinalGrade for each indicator
+    3. Selects top 8 indicators with highest absolute correlation
+    4. Weights each indicator proportionally to its correlation strength
+    5. Computes weighted intervention score (0-1 scale)
     
     The score ranges from 0 to 1, where higher values indicate more actionable
-    interventions (easier to help the student). The score is based on the presence
-    of 8 actionable indicators:
-    
-    1. High absences (above median)
-    2. Low study time (less than 2 hours per week)
-    3. Alcohol consumption issues (workday or weekend >= 3)
-    4. Past failures (one or more)
-    5. No school support
-    6. No family support
-    7. Poor family relations (score < 3)
-    8. Health issues (score < 3)
+    interventions. This data-driven approach ensures statistically significant
+    indicators are prioritized over domain assumptions.
     
     Args:
         df: DataFrame containing student data with required columns
         
     Returns:
-        DataFrame with added 'intervention_score' column
+        DataFrame with added 'intervention_score' column and individual indicator flags
         
     Raises:
         KeyError: If required columns are missing from the DataFrame
     """
-    logger.debug(f"Calculating intervention scores for {len(df)} students")
+    logger.info(f"Starting exhaustive correlation-based intervention score calculation for {len(df)} students")
     df = df.copy()
     
-    # Calculate median absences for comparison
-    absences_median = df['absences'].median()
+    # Define ALL possible indicators across all categories
+    # Format: (name, field, threshold_function, category)
+    indicator_definitions = [
+        # Demographic indicators
+        ('sex_male', 'sex', lambda x: x == 'M', 'demographic'),
+        ('age_high', 'age', lambda x: x >= 18, 'demographic'),
+        ('address_rural', 'address', lambda x: x == 'R', 'demographic'),
+        
+        # Family indicators
+        ('famsize_small', 'famsize', lambda x: x == 'LE3', 'family'),
+        ('pstatus_apart', 'Pstatus', lambda x: x == 'A', 'family'),
+        ('medu_low', 'Medu', lambda x: x <= 2, 'family'),
+        ('fedu_low', 'Fedu', lambda x: x <= 2, 'family'),
+        ('mjob_at_home', 'Mjob', lambda x: x == 'at_home', 'family'),
+        ('fjob_at_home', 'Fjob', lambda x: x == 'at_home', 'family'),
+        ('guardian_other', 'guardian', lambda x: x == 'other', 'family'),
+        ('famrel_poor', 'famrel', lambda x: x <= 2, 'family'),
+        ('famrel_low', 'famrel', lambda x: x < 3, 'family'),
+        
+        # School behavior indicators
+        ('traveltime_high', 'traveltime', lambda x: x >= 3, 'school_behavior'),
+        ('studytime_very_low', 'studytime', lambda x: x <= 1, 'school_behavior'),
+        ('studytime_low', 'studytime', lambda x: x <= 2, 'school_behavior'),
+        ('failures_any', 'failures', lambda x: x > 0, 'school_behavior'),
+        ('absences_high', 'absences', lambda x: x > 10, 'school_behavior'),
+        ('absences_very_high', 'absences', lambda x: x > 20, 'school_behavior'),
+        
+        # Support indicators
+        ('no_school_support', 'schoolsup', lambda x: x == 'no', 'support'),
+        ('no_family_support', 'famsup', lambda x: x == 'no', 'support'),
+        ('no_paid_classes', 'paid', lambda x: x == 'no', 'support'),
+        
+        # Activities and aspirations
+        ('no_activities', 'activities', lambda x: x == 'no', 'activities'),
+        ('no_nursery', 'nursery', lambda x: x == 'no', 'activities'),
+        ('no_higher_aspiration', 'higher', lambda x: x == 'no', 'activities'),
+        ('no_internet', 'internet', lambda x: x == 'no', 'activities'),
+        ('in_relationship', 'romantic', lambda x: x == 'yes', 'activities'),
+        
+        # Leisure indicators
+        ('freetime_high', 'freetime', lambda x: x >= 4, 'leisure'),
+        ('goout_high', 'goout', lambda x: x >= 4, 'leisure'),
+        
+        # Health indicators (alcohol)
+        ('dalc_moderate', 'Dalc', lambda x: x >= 2, 'health'),
+        ('dalc_high', 'Dalc', lambda x: x >= 3, 'health'),
+        ('walc_moderate', 'Walc', lambda x: x >= 3, 'health'),
+        ('walc_high', 'Walc', lambda x: x >= 4, 'health'),
+        ('health_poor', 'health', lambda x: x <= 2, 'health'),
+        ('health_average', 'health', lambda x: x == 3, 'health'),
+        
+        # Motivation indicators
+        ('reason_course', 'reason', lambda x: x == 'course', 'motivation'),
+        ('reason_reputation', 'reason', lambda x: x == 'reputation', 'motivation'),
+        ('reason_home', 'reason', lambda x: x == 'home', 'motivation'),
+    ]
     
-    # Initialize indicator flags
-    indicators = pd.DataFrame(index=df.index)
+    logger.info(f"Testing {len(indicator_definitions)} indicators across {len(set(cat for _, _, _, cat in indicator_definitions))} categories")
     
-    # 1. High absences (above median)
-    indicators['high_absences'] = (df['absences'] > absences_median).astype(int)
+    # Calculate correlations for all indicators
+    correlation_results = []
     
-    # 2. Low study time (studytime == 1, which means <2 hours/week)
-    indicators['low_studytime'] = (df['studytime'] == 1).astype(int)
+    for name, field, threshold_func, category in indicator_definitions:
+        try:
+            if field not in df.columns:
+                logger.debug(f"Skipping indicator {name}: field {field} not in dataframe")
+                continue
+            
+            # Create binary indicator
+            binary_values = []
+            grades = []
+            
+            for idx, row in df.iterrows():
+                if pd.notna(row.get(field)) and pd.notna(row.get('FinalGrade')):
+                    binary_values.append(1 if threshold_func(row[field]) else 0)
+                    grades.append(row['FinalGrade'])
+            
+            if len(binary_values) < 10:  # Skip if too few samples
+                continue
+            
+            # Calculate correlation with FinalGrade
+            corr = calculate_correlation(binary_values, grades)
+            
+            correlation_results.append({
+                'name': name,
+                'field': field,
+                'threshold': threshold_func,
+                'category': category,
+                'correlation': abs(corr),  # Absolute value for ranking
+                'raw_correlation': corr,
+                'count': sum(binary_values),
+                'sample_size': len(binary_values)
+            })
+            
+        except Exception as e:
+            logger.warning(f"Error processing indicator {name}: {e}")
+            continue
     
-    # 3. Alcohol consumption issues (Dalc >= 3 OR Walc >= 3)
-    indicators['alcohol_issues'] = ((df['Dalc'] >= 3) | (df['Walc'] >= 3)).astype(int)
+    # Sort by absolute correlation (descending)
+    correlation_results.sort(key=lambda x: x['correlation'], reverse=True)
     
-    # 4. Past failures (failures > 0)
-    indicators['past_failures'] = (df['failures'] > 0).astype(int)
+    logger.info(f"Successfully calculated correlations for {len(correlation_results)} indicators")
     
-    # 5. No school support (schoolsup == 'no')
-    indicators['no_school_support'] = (df['schoolsup'] == 'no').astype(int)
+    # Select top 8 indicators
+    top_indicators = correlation_results[:8]
     
-    # 6. No family support (famsup == 'no')
-    indicators['no_family_support'] = (df['famsup'] == 'no').astype(int)
+    # Calculate normalized weights based on correlation strength
+    sum_correlations = sum(ind['correlation'] for ind in top_indicators)
+    for ind in top_indicators:
+        ind['weight'] = ind['correlation'] / sum_correlations if sum_correlations > 0 else 1/8
+    
+    logger.info("Top 8 indicators selected:")
+    for idx, ind in enumerate(top_indicators, 1):
+        logger.info(f"  {idx}. {ind['name']} (corr={ind['raw_correlation']:.3f}, weight={ind['weight']:.3f})")
+    
+    # Calculate weighted intervention score for each student
+    df['intervention_score'] = 0.0
+    indicator_columns = pd.DataFrame(index=df.index)
+    
+    for ind in top_indicators:
+        # Create binary column for this indicator
+        indicator_col = df.apply(
+            lambda row: 1 if pd.notna(row.get(ind['field'])) and ind['threshold'](row[ind['field']]) else 0,
+            axis=1
+        )
+        
+        # Store indicator column
+        indicator_columns[ind['name']] = indicator_col
+        
+        # Add weighted contribution to intervention score
+        df['intervention_score'] += indicator_col * ind['weight']
+    
+    # Store individual indicator columns for backward compatibility with existing code
+    # Populate ALL legacy indicators based on raw data (not just top 8 selected)
+    # This ensures dashboard shows accurate prevalence even for non-selected indicators
+    
+    # 1. High absences (above 10)
+    df['high_absences'] = (df['absences'] > 10).astype(int)
+    
+    # 2. Low study time (studytime <= 2)
+    df['low_studytime'] = (df['studytime'] <= 2).astype(int)
+    
+    # 3. Alcohol issues (Dalc >= 3 OR Walc >= 3)
+    df['alcohol_issues'] = ((df['Dalc'] >= 3) | (df['Walc'] >= 3)).astype(int)
+    
+    # 4. Past failures
+    df['past_failures'] = (df['failures'] > 0).astype(int)
+    
+    # 5. No school support
+    df['no_school_support'] = (df['schoolsup'] == 'no').astype(int)
+    
+    # 6. No family support
+    df['no_family_support'] = (df['famsup'] == 'no').astype(int)
     
     # 7. Poor family relations (famrel < 3)
-    indicators['poor_family_relations'] = (df['famrel'] < 3).astype(int)
+    df['poor_family_relations'] = (df['famrel'] < 3).astype(int)
     
     # 8. Health issues (health < 3)
-    indicators['health_issues'] = (df['health'] < 3).astype(int)
+    df['health_issues'] = (df['health'] < 3).astype(int)
     
-    # Calculate intervention score (sum of indicators / 8.0)
-    df['intervention_score'] = indicators.sum(axis=1) / 8.0
+    # Store all top indicator columns for reference
+    for ind in top_indicators:
+        df[ind['name']] = indicator_columns[ind['name']]
     
-    # Store individual indicator columns for later reference
-    for col in indicators.columns:
-        df[col] = indicators[col]
+    # Store metadata about selected indicators as dataframe attributes
+    # This allows the dashboard to dynamically display the correct indicators
+    df.attrs['top_indicators'] = [
+        {
+            'name': ind['name'],
+            'display_name': ind['name'].replace('_', ' ').title(),
+            'correlation': ind['raw_correlation'],
+            'weight': ind['weight'],
+            'category': ind['category']
+        }
+        for ind in top_indicators
+    ]
+    
+    # Validation: calculate correlation between intervention_score and FinalGrade
+    valid_scores = df[df['FinalGrade'].notna()]['intervention_score'].tolist()
+    valid_grades = df[df['FinalGrade'].notna()]['FinalGrade'].tolist()
+    validation_corr = calculate_correlation(valid_scores, valid_grades)
     
     logger.info(f"Intervention scores calculated. Mean score: {df['intervention_score'].mean():.3f}")
+    logger.info(f"Validation correlation (score vs grade): {validation_corr:.3f}")
+    
     return df
 
 

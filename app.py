@@ -345,32 +345,64 @@ def create_priority_matrix(df: pd.DataFrame) -> go.Figure:
 def create_indicator_distribution_chart(df: pd.DataFrame) -> go.Figure:
     """
     Create bar chart showing distribution of actionable indicators.
+    Dynamically displays the top indicators selected by correlation analysis.
     
     Args:
-        df: Student DataFrame with indicator columns
+        df: Student DataFrame with indicator columns and top_indicators metadata
         
     Returns:
         Plotly figure object
     """
-    indicator_map = {
-        'high_absences': 'High Absences',
-        'low_studytime': 'Low Study Time',
-        'alcohol_issues': 'Alcohol Issues',
-        'past_failures': 'Past Failures',
-        'no_school_support': 'No School Support',
-        'no_family_support': 'No Family Support',
-        'poor_family_relations': 'Poor Family Relations',
-        'health_issues': 'Health Issues'
-    }
+    # Get dynamically selected indicators from dataframe metadata
+    top_indicators = df.attrs.get('top_indicators', [])
+    
+    if not top_indicators:
+        # Fallback to legacy indicators if metadata not available
+        indicator_map = {
+            'high_absences': 'High Absences',
+            'low_studytime': 'Low Study Time',
+            'alcohol_issues': 'Alcohol Issues',
+            'past_failures': 'Past Failures',
+            'no_school_support': 'No School Support',
+            'no_family_support': 'No Family Support',
+            'poor_family_relations': 'Poor Family Relations',
+            'health_issues': 'Health Issues'
+        }
+        indicators_to_show = [(col, label) for col, label in indicator_map.items() if col in df.columns]
+    else:
+        # Use dynamically selected indicators
+        indicators_to_show = [(ind['name'], ind['display_name']) for ind in top_indicators]
     
     # Calculate percentages
     percentages = []
     labels = []
+    colors = []
+    hover_texts = []
     
-    for col, label in indicator_map.items():
-        percentage = (df[col].sum() / len(df)) * 100
-        percentages.append(percentage)
-        labels.append(label)
+    for col, label in indicators_to_show:
+        if col in df.columns:
+            percentage = (df[col].sum() / len(df)) * 100
+            percentages.append(percentage)
+            labels.append(label)
+            
+            # Color code by correlation if available
+            if top_indicators:
+                ind_meta = next((ind for ind in top_indicators if ind['name'] == col), None)
+                if ind_meta:
+                    # Stronger correlation = darker color
+                    colors.append(f"rgba(31, 119, 180, {0.5 + abs(ind_meta['correlation']) * 0.5})")
+                    hover_texts.append(
+                        f"{label}<br>" +
+                        f"Prevalence: {percentage:.1f}%<br>" +
+                        f"Correlation: {ind_meta['correlation']:.3f}<br>" +
+                        f"Weight: {ind_meta['weight']*100:.1f}%"
+                    )
+                else:
+                    colors.append('#1f77b4')
+                    hover_texts.append(f"{label}<br>Prevalence: {percentage:.1f}%")
+            else:
+                colors.append('#1f77b4')
+                hover_texts.append(f"{label}<br>Prevalence: {percentage:.1f}%")
     
     # Create bar chart
     fig = go.Figure(data=[
@@ -378,19 +410,23 @@ def create_indicator_distribution_chart(df: pd.DataFrame) -> go.Figure:
             x=percentages,
             y=labels,
             orientation='h',
-            marker=dict(color='#1f77b4'),
+            marker=dict(color=colors),
             text=[f'{p:.1f}%' for p in percentages],
-            textposition='outside'
+            textposition='outside',
+            hovertext=hover_texts,
+            hoverinfo='text'
         )
     ])
     
+    title = 'Top 8 Indicators Selected by Correlation Analysis' if top_indicators else 'Distribution of Actionable Indicators'
+    
     fig.update_layout(
-        title='Distribution of Actionable Indicators',
+        title=title,
         xaxis_title='Percentage of Students (%)',
         yaxis_title='Indicator',
         height=400,
         showlegend=False,
-        xaxis=dict(range=[0, max(percentages) * 1.15])
+        xaxis=dict(range=[0, max(percentages) * 1.15] if percentages else [0, 100])
     )
     
     return fig

@@ -13,25 +13,37 @@ Your data file (CSV, XLSX, or XLS) must include these columns:
 - FinalGrade
 - absences
 - studytime
-- Dalc
-- Walc
+- Dalc (workday alcohol consumption)
+- Walc (weekend alcohol consumption)
 - failures
 - schoolsup
 - famsup
 - famrel
 - health
 
-### Optional Demographic Columns
-- age
-- sex
-- address
-- Medu
-- Fedu
-- famsize
-- Pstatus
-- paid
-- activities
-- internet
+### Optional Demographic & Enrichment Columns
+Including more columns improves the data-driven indicator selection:
+
+**Demographics:**
+- age, sex, address
+
+**Family Background:**
+- Medu, Fedu (parent education)
+- Mjob, Fjob (parent jobs)
+- famsize, Pstatus (family size, parent status)
+- guardian (primary guardian)
+
+**School & Support:**
+- traveltime, paid, activities, nursery, higher, internet, reason
+
+**Lifestyle:**
+- freetime, goout, romantic
+
+**Note:** The dashboard automatically analyzes all available columns to select the most predictive indicators using correlation analysis. More data = better predictions! The system will:
+- Test 37+ potential indicators across 8 categories
+- Select the top 8 with strongest correlation to grades
+- Display only these selected indicators in the dashboard
+- Weight each indicator by its predictive power
 
 ## Example Format
 

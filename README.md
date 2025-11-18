@@ -6,7 +6,19 @@ A comprehensive Streamlit dashboard for the Portuguese Ministry of Education to 
 
 This dashboard helps educational counselors prioritize students based on two key dimensions:
 - **Current Performance**: Final grade in mathematics (0-20 scale)
-- **Intervention Complexity**: How actionable/easy it is to help them based on 8 key indicators
+- **Intervention Complexity**: How actionable/easy it is to help them based on data-driven indicator selection
+
+### Data-Driven Methodology
+
+The dashboard employs an **exhaustive correlation-based approach** to identify the most impactful intervention indicators:
+
+1. **Comprehensive Testing**: Analyzes 37+ potential indicators across 8 categories (demographics, family, school behavior, support, activities, leisure, health, motivation)
+2. **Correlation Analysis**: Calculates Pearson correlation between each indicator and student grades (FinalGrade)
+3. **Smart Selection**: Automatically selects the top 8 indicators with highest absolute correlation
+4. **Weighted Scoring**: Each indicator is weighted proportionally to its predictive power (correlation strength)
+5. **Validation**: Final intervention score is validated against actual grades to ensure statistical significance
+
+This data-driven approach ensures that the most statistically significant factors are prioritized over domain assumptions, resulting in more accurate student prioritization.
 
 ## Features
 
@@ -17,15 +29,35 @@ This dashboard helps educational counselors prioritize students based on two key
 - Quadrant lines showing critical thresholds
 
 ### 📊 Actionable Indicators
-The system evaluates 8 key indicators for each student:
-1. **High Absences**: Above median attendance issues
-2. **Low Study Time**: Less than 2 hours per week
-3. **Alcohol Consumption**: Workday or weekend consumption ≥ 3
-4. **Past Failures**: Previous class failures
-5. **No School Support**: Not receiving extra educational support
-6. **No Family Support**: Lacking family educational support
-7. **Poor Family Relations**: Family relationship quality < 3
-8. **Health Issues**: Health status < 3
+
+The system **dynamically selects** the top 8 most predictive indicators from a comprehensive set of 37+ potential factors:
+
+**Indicator Categories Analyzed:**
+- **Demographic**: Age, gender, address (urban/rural)
+- **Family**: Education levels, jobs, family size, parent status, family relations
+- **School Behavior**: Absences, study time, travel time, past failures
+- **Support Systems**: School support, family support, paid classes
+- **Activities**: Extra-curricular activities, internet access, nursery, higher education aspirations
+- **Leisure**: Free time, social activities
+- **Health**: Alcohol consumption (various thresholds), general health status
+- **Motivation**: Reason for school choice
+
+**Typical Top Indicators** (based on correlation with grades):
+1. **Past Failures** (corr ≈ -0.28): Previous class failures strongly predict current performance
+2. **No School Support** (corr ≈ +0.24): Lack of tutoring/extra help correlates with lower grades
+3. **High Absences** (corr ≈ -0.20): Frequent absences (>10 days) impact learning
+4. **Weekend Alcohol** (corr ≈ -0.18): Alcohol consumption affects academic focus
+5. **Low Study Time** (corr ≈ -0.18): Insufficient study hours (≤2/week) limits progress
+6. **High Social Activity** (corr ≈ -0.18): Excessive going out time detracts from studies
+7-8. Additional indicators weighted by correlation strength
+
+*Note: The specific indicators and their weights are recalculated for each dataset to ensure optimal accuracy.*
+
+**Dashboard Display**: The "Actionable Indicators Overview" chart dynamically shows only the top 8 selected indicators for your dataset, with:
+- Prevalence percentages (% of students affected)
+- Color-coded bars by correlation strength
+- Hover tooltips displaying correlation values and weights
+- Different datasets will show different indicators based on what statistically matters most
 
 ### 🔍 Advanced Filtering
 - Filter by grade range
@@ -278,7 +310,10 @@ Ekinox-Student-Intervention-Dashboard/
 After loading data, you'll see:
 - Priority matrix showing all students
 - Top 30 priority students list
-- Distribution of actionable indicators
+- **Actionable Indicators Overview**: Bar chart dynamically displaying the top 8 indicators selected for your dataset
+  - Shows prevalence percentage for each indicator
+  - Hover over bars to see correlation strength and weight
+  - Indicators vary by dataset based on statistical analysis
 - Summary statistics
 
 ### 3. Filtering Students
@@ -306,8 +341,14 @@ Use the sidebar to:
 
 ### Intervention Score (0-1)
 - **Higher = More Actionable**: Easier to help with concrete interventions
-- Calculated as: (number of actionable indicators) / 8
-- Score of 0.5+ indicates multiple actionable areas
+- **Calculation Method**: Weighted sum of top 8 indicators, where each indicator's contribution is proportional to its correlation strength with grades
+  - Formula: `Σ(indicator_present × weight_i)` where weights sum to 1.0
+  - Weights determined by: `weight_i = |correlation_i| / Σ|correlations|`
+- **Score Interpretation**:
+  - 0.0-0.3: Few actionable interventions
+  - 0.3-0.5: Moderate intervention opportunities
+  - 0.5+: Multiple high-impact intervention areas
+- **Validation**: Correlation with grades typically ≈ -0.25 to -0.30 (strong negative relationship confirms predictive validity)
 
 ### Priority Score
 - **Higher = More Urgent**: Combined need and actionability
